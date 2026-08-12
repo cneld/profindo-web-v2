@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../utils/supabase";
+import { generateUniqueWoNumber } from "../../../../utils/woNumber";
 
 export default function WorkOrdersPage() {
   const [workOrders, setWorkOrders] = useState<any[]>([]);
@@ -66,11 +67,12 @@ export default function WorkOrdersPage() {
     setIsLoading(false);
   };
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = async () => {
     setModalMode("add");
     setSelectedWo(null);
+    const woNumber = await generateUniqueWoNumber();
     setFormData({
-      wo_number: `WO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`, 
+      wo_number: woNumber, 
       nama_klien: "",
       machine_id: "", technician_id: "", judul_pekerjaan: "", deskripsi: "",
       priority: "Medium", status: "Open", jadwal_mulai: "", jadwal_selesai: ""
@@ -113,7 +115,9 @@ export default function WorkOrdersPage() {
     };
 
     let error;
-    const actorName = localStorage.getItem("user_name") || "Admin"; // Konsisten pakai data login
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: actor } = user ? await supabase.from("technicians").select("nama_lengkap").eq("email", user.email ?? "").maybeSingle() : { data: null };
+    const actorName = actor?.nama_lengkap || "Admin";
 
     if (modalMode === "add") {
       const { error: insErr } = await supabase.from("work_orders").insert([payload]);
@@ -138,7 +142,8 @@ export default function WorkOrdersPage() {
     }
 
     if (error) {
-      setSubmitModal({ isOpen: true, status: "error", message: error.message });
+      console.error("Work order mutation failed", error);
+      setSubmitModal({ isOpen: true, status: "error", message: "Work order gagal disimpan. Periksa data lalu coba lagi." });
     } else {
       setSubmitModal({ isOpen: true, status: "success", message: "" });
       setTimeout(() => {
@@ -158,7 +163,9 @@ export default function WorkOrdersPage() {
     const { error } = await supabase.from("work_orders").update({ status: statusModal.newStatus }).eq("id", statusModal.id);
     
     if (!error) {
-       const actorName = localStorage.getItem("user_name") || "Admin"; // Konsisten pakai data login
+       const { data: { user } } = await supabase.auth.getUser();
+       const { data: actor } = user ? await supabase.from("technicians").select("nama_lengkap").eq("email", user.email ?? "").maybeSingle() : { data: null };
+       const actorName = actor?.nama_lengkap || "Admin";
        await supabase.from("activity_logs").insert([{
          actor_name: actorName, 
          action_text: `mengubah status ${statusModal.wo_number} menjadi ${statusModal.newStatus}`,
@@ -172,7 +179,8 @@ export default function WorkOrdersPage() {
        }, 1500);
     } else {
        // KALO GAGAL, KASIH TAU ERRORNYA
-       setStatusModal({ ...statusModal, status: "error", message: error.message });
+       console.error("Work order status update failed", error);
+       setStatusModal({ ...statusModal, status: "error", message: "Status work order gagal diperbarui. Coba lagi." });
     }
   };
 
@@ -192,7 +200,8 @@ export default function WorkOrdersPage() {
       }, 1500);
     } else {
       // KALO GAGAL, KASIH TAU ERRORNYA
-      setDeleteModal({ ...deleteModal, status: "error", message: error.message });
+      console.error("Work order delete failed", error);
+      setDeleteModal({ ...deleteModal, status: "error", message: "Work order gagal dihapus. Coba lagi." });
     }
   };
 
